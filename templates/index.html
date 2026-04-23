@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>オセロ</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --cell: 68px;
+  --board-size: calc(var(--cell) * 8);
+  --green-dark: #0d3321;
+  --green-mid: #1a5c2e;
+  --green-cell: #2e7d3a;
+  --green-hover: #3a9448;
+  --green-line: #1d5c28;
+  --accent: #5ec76d;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: radial-gradient(ellipse at 30% 20%, #0f4a24 0%, var(--green-dark) 70%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  padding: 16px;
+}
+
+/* ======= START SCREEN ======= */
+#start-screen {
+  text-align: center;
+  animation: fadeIn 0.5s ease;
+}
+
+.title {
+  font-size: clamp(2.5rem, 8vw, 4.5rem);
+  font-weight: 900;
+  letter-spacing: 0.25em;
+  margin-bottom: 6px;
+  background: linear-gradient(135deg, #fff 30%, #9be5a0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subtitle {
+  color: #7fcc8a;
+  font-size: 1rem;
+  margin-bottom: 48px;
+  letter-spacing: 0.05em;
+}
+
+.cards {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.card {
+  background: rgba(26, 92, 46, 0.7);
+  border: 2px solid #2d7a3a;
+  border-radius: 18px;
+  padding: 28px 24px;
+  width: 180px;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  user-select: none;
+}
+
+.card:hover {
+  transform: translateY(-6px);
+  border-color: var(--accent);
+  box-shadow: 0 12px 36px rgba(94, 199, 109, 0.25);
+}
+
+.card:active { transform: translateY(-2px); }
+
+.card-icon { font-size: 2.6rem; margin-bottom: 12px; }
+.card-name { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; }
+.card-desc { font-size: 0.78rem; color: #8dce96; line-height: 1.5; }
+
+.card[data-d="easy"]   .card-name { color: #81d4fa; }
+.card[data-d="medium"] .card-name { color: #a5d6a7; }
+.card[data-d="hard"]   .card-name { color: #ef9a9a; }
+
+/* ======= GAME SCREEN ======= */
+#game-screen {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  animation: fadeIn 0.4s ease;
+}
+
+/* --- Top bar --- */
+.topbar {
+  width: var(--board-size);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scorebox {
+  flex: 1;
+  background: rgba(26, 92, 46, 0.8);
+  border: 1px solid #2d7a3a;
+  border-radius: 40px;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.player-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stone-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.stone-badge.white {
+  background: radial-gradient(circle at 35% 35%, #fff, #ccc);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.stone-badge.black {
+  background: radial-gradient(circle at 35% 35%, #555, #111);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  border: 1px solid #555;
+}
+
+.player-meta { line-height: 1.3; }
+.player-label { font-size: 0.72rem; color: #7fcc8a; }
+.player-name  { font-size: 0.9rem; font-weight: 600; }
+.player-num   { font-size: 2rem; font-weight: 800; line-height: 1; }
+
+.vs { font-size: 0.85rem; color: #4a8c56; font-weight: 700; }
+
+.turn-pill {
+  font-size: 0.65rem;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: transparent;
+  color: #4a8c56;
+  border: 1px solid #2d7a3a;
+  white-space: nowrap;
+  transition: all 0.3s;
+}
+
+.turn-pill.active {
+  background: var(--accent);
+  color: #0d3321;
+  font-weight: 700;
+  border-color: var(--accent);
+}
+
+.btn-end {
+  background: rgba(26, 92, 46, 0.8);
+  color: #7fcc8a;
+  border: 1px solid #2d7a3a;
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-end:hover { background: #2d7a3a; color: #fff; }
+
+/* --- Board --- */
+.board-wrap { position: relative; }
+
+#board {
+  display: grid;
+  grid-template-columns: repeat(8, var(--cell));
+  grid-template-rows: repeat(8, var(--cell));
+  border: 3px solid #0b2e1c;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 16px 50px rgba(0,0,0,0.6), 0 0 0 1px #1d5c28;
+}
+
+.cell {
+  background: var(--green-cell);
+  border: 1px solid var(--green-line);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s;
+}
+
+.cell.valid { cursor: pointer; }
+.cell.valid:hover { background: var(--green-hover); }
+
+/* --- Stones --- */
+.stone {
+  width: calc(var(--cell) - 14px);
+  height: calc(var(--cell) - 14px);
+  border-radius: 50%;
+  position: absolute;
+  pointer-events: none;
+}
+
+.stone.white {
+  background: radial-gradient(circle at 38% 32%, #ffffff, #c8c8c8);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.45), inset 0 1px 4px rgba(255,255,255,0.9);
+}
+
+.stone.black {
+  background: radial-gradient(circle at 38% 32%, #606060, #0e0e0e);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.6), inset 0 1px 3px rgba(255,255,255,0.12);
+}
+
+.stone.last-player {
+  box-shadow: 0 0 0 3px #ffd700, 0 3px 10px rgba(0,0,0,0.45),
+              inset 0 1px 4px rgba(255,255,255,0.9);
+}
+
+.stone.last-ai {
+  box-shadow: 0 0 0 3px #ff6b6b, 0 3px 10px rgba(0,0,0,0.6),
+              inset 0 1px 3px rgba(255,255,255,0.12);
+}
+
+/* Valid move indicator */
+.hint-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.28);
+  pointer-events: none;
+  position: absolute;
+  transition: transform 0.1s;
+}
+
+.cell.valid:hover .hint-dot { transform: scale(1.25); }
+
+/* Stone animations */
+@keyframes place-stone {
+  0%   { transform: scale(0); opacity: 0; }
+  65%  { transform: scale(1.12); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.stone.placing { animation: place-stone 0.22s ease forwards; }
+
+/* --- AI thinking overlay --- */
+#ai-thinking {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 28, 14, 0.38);
+  border-radius: 4px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: all;
+}
+
+#ai-thinking.show { display: flex; }
+
+.dots { display: flex; gap: 9px; }
+.dot {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: bounce 0.75s ease-in-out infinite;
+}
+.dot:nth-child(2) { animation-delay: 0.15s; }
+.dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+/* --- Status bar --- */
+#status-bar {
+  width: var(--board-size);
+  text-align: center;
+  font-size: 0.95rem;
+  color: #9be5a0;
+  min-height: 24px;
+  transition: opacity 0.3s;
+}
+
+/* --- Diff badge --- */
+#diff-badge {
+  font-size: 0.75rem;
+  color: #4a8c56;
+}
+
+/* ======= PASS TOAST ======= */
+#pass-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.85);
+  background: var(--green-mid);
+  border: 2px solid var(--accent);
+  border-radius: 14px;
+  padding: 14px 36px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+#pass-toast.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* ======= GAME OVER OVERLAY ======= */
+#over-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(5px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+#over-overlay.show { display: flex; animation: fadeIn 0.3s ease; }
+
+.result-card {
+  background: linear-gradient(145deg, #1a5c2e, #0f3d1f);
+  border: 2px solid #3a9a4a;
+  border-radius: 24px;
+  padding: 44px 52px;
+  text-align: center;
+  max-width: 340px;
+  width: 90%;
+  animation: slideUp 0.4s ease;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+}
+
+.result-emoji  { font-size: 4rem; display: block; margin-bottom: 14px; }
+.result-title  { font-size: 2rem; font-weight: 800; margin-bottom: 10px; }
+.result-scores {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 28px;
+  padding: 14px 20px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+}
+
+.rscore { text-align: center; }
+.rscore .rlabel { font-size: 0.75rem; color: #7fcc8a; margin-bottom: 4px; }
+.rscore .rnum   { font-size: 2.2rem; font-weight: 800; }
+
+.btn-play-again {
+  background: var(--accent);
+  color: #0d3321;
+  font-weight: 800;
+  font-size: 1rem;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 36px;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.btn-play-again:hover {
+  background: #78d985;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(94,199,109,0.4);
+}
+
+/* ======= LEGEND ======= */
+.legend {
+  display: flex;
+  gap: 20px;
+  font-size: 0.72rem;
+  color: #4a8c56;
+  align-items: center;
+}
+
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.legend-dot  { width: 10px; height: 10px; border-radius: 50%; }
+.legend-dot.gold   { background: #ffd700; box-shadow: 0 0 0 2px #ffd700; }
+.legend-dot.red    { background: #ff6b6b; box-shadow: 0 0 0 2px #ff6b6b; }
+.legend-dot.hint   { background: rgba(255,255,255,0.28); }
+
+/* ======= ANIMATIONS ======= */
+@keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Responsive */
+@media (max-width: 600px) {
+  :root { --cell: calc((100vw - 36px) / 8); }
+  .topbar { width: 100%; }
+  .result-card { padding: 32px 28px; }
+}
+</style>
+</head>
+<body>
+
+<!-- =========== START SCREEN =========== -->
+<div id="start-screen">
+  <h1 class="title">オセロゲーム</h1>
+  <p class="subtitle">難易度を選んでゲームスタート</p>
+  <div class="cards">
+    <div class="card" data-d="easy" onclick="startGame('easy')">
+      <div class="card-name">簡単</div>
+    </div>
+    <div class="card" data-d="medium" onclick="startGame('medium')">
+      <div class="card-name">普通</div>
+    </div>
+    <div class="card" data-d="hard" onclick="startGame('hard')">
+      <div class="card-name">難しい</div>
+    </div>
+  </div>
+</div>
+
+<!-- =========== GAME SCREEN =========== -->
+<div id="game-screen">
+  <div class="topbar">
+    <div class="scorebox">
+      <!-- Player (white) -->
+      <div class="player-side">
+        <div class="stone-badge white"></div>
+        <div class="player-meta">
+          <div class="player-label">あなた &nbsp;<span class="turn-pill" id="pill-player"></span></div>
+          <div class="player-num" id="score-player">2</div>
+        </div>
+      </div>
+      <div class="vs">VS</div>
+      <!-- AI (black) -->
+      <div class="player-side">
+        <div class="player-meta" style="text-align:right">
+          <div class="player-label"><span class="turn-pill" id="pill-ai"></span>&nbsp; AI</div>
+          <div class="player-num" id="score-ai">2</div>
+        </div>
+        <div class="stone-badge black"></div>
+      </div>
+    </div>
+    <button class="btn-end" onclick="goToStart()">終了</button>
+  </div>
+
+  <div class="board-wrap">
+    <div id="board"></div>
+    <div id="ai-thinking">
+      <div class="dots">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="status-bar"></div>
+
+  <div class="legend">
+    <span id="diff-badge"></span>
+    <span class="legend-item"><span class="legend-dot hint"></span>置けるマス</span>
+    <span class="legend-item"><span class="legend-dot gold"></span>あなたの最後の手</span>
+    <span class="legend-item"><span class="legend-dot red"></span>AIの最後の手</span>
+  </div>
+</div>
+
+<!-- =========== PASS TOAST =========== -->
+<div id="pass-toast"></div>
+
+<!-- =========== GAME OVER OVERLAY =========== -->
+<div id="over-overlay">
+  <div class="result-card">
+    <div class="result-title" id="r-title">Win</div>
+    <div class="result-scores">
+      <div class="rscore">
+        <div class="rlabel">あなた（白）</div>
+        <div class="rnum" id="r-player">—</div>
+      </div>
+      <div class="rscore">
+        <div class="rlabel">AI（黒）</div>
+        <div class="rnum" id="r-ai">—</div>
+      </div>
+    </div>
+    <button class="btn-play-again" onclick="goToStart()">もう一度プレイ</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+let state = null;
+let gameId = 0;
+let prevBoard = null;
+
+function goToStart() {
+  gameId++;
+  prevBoard = null;
+  document.getElementById('start-screen').style.display = '';
+  document.getElementById('game-screen').style.display = 'none';
+  document.getElementById('over-overlay').classList.remove('show');
+}
+
+async function startGame(diff) {
+  const myId = ++gameId;
+  prevBoard = null;
+
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('game-screen').style.display = 'flex';
+
+  const diffLabel = { easy: '簡単', medium: '普通', hard: '難しい' };
+  document.getElementById('diff-badge').textContent = '難易度: ' + diffLabel[diff];
+
+  buildBoard();
+
+  const res = await fetch('/api/new_game', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ difficulty: diff }),
+  });
+  const s = await res.json();
+  if (myId !== gameId) return;
+
+  applyState(s);
+
+  if (s.turn === -1 && !s.game_over) {
+    await triggerAI(myId, 600);
+  }
+}
+
+// Build the 64-cell grid once
+function buildBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.id = `c${x}${y}`;
+      cell.addEventListener('click', () => onCellClick(x, y));
+      board.appendChild(cell);
+    }
+  }
+}
+
+function applyState(s) {
+  state = s;
+
+  // Scores
+  document.getElementById('score-player').textContent = s.player_score;
+  document.getElementById('score-ai').textContent = s.ai_score;
+
+  // Status
+  document.getElementById('status-bar').textContent = s.message;
+
+  // Turn pills
+  const pp = document.getElementById('pill-player');
+  const pa = document.getElementById('pill-ai');
+  pp.textContent = '';
+  pa.textContent = '';
+  pp.className = 'turn-pill';
+  pa.className = 'turn-pill';
+  if (!s.game_over) {
+    if (s.turn === 1)  { pp.textContent = '▶ あなたの番'; pp.className = 'turn-pill active'; }
+    if (s.turn === -1) { pa.textContent = '▶ AIの番';     pa.className = 'turn-pill active'; }
+  }
+
+  // Build valid move set
+  const validSet = new Set((s.valid_moves || []).map(([x, y]) => `${x},${y}`));
+
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const cell = document.getElementById(`c${x}${y}`);
+      cell.innerHTML = '';
+      cell.className = 'cell';
+
+      const newVal = s.board[y][x];
+      const oldVal = prevBoard ? prevBoard[y][x] : newVal;
+
+      if (newVal !== 0) {
+        const stone = document.createElement('div');
+        const color = newVal === 1 ? 'white' : 'black';
+        stone.className = `stone ${color}`;
+
+        if (newVal !== oldVal) stone.classList.add('placing');
+
+        const isLastPlayer = s.last_move   && s.last_move[0]   === x && s.last_move[1]   === y;
+        const isLastAI     = s.last_ai_move && s.last_ai_move[0] === x && s.last_ai_move[1] === y;
+        if (isLastPlayer) stone.classList.add('last-player');
+        if (isLastAI)     stone.classList.add('last-ai');
+
+        cell.appendChild(stone);
+      } else if (s.turn === 1 && !s.game_over && validSet.has(`${x},${y}`)) {
+        cell.classList.add('valid');
+        const dot = document.createElement('div');
+        dot.className = 'hint-dot';
+        cell.appendChild(dot);
+      }
+    }
+  }
+
+  prevBoard = s.board.map(row => [...row]);
+
+  if (s.game_over) showGameOver(s);
+}
+
+function showGameOver(s) {
+  document.getElementById('over-overlay').classList.add('show');
+
+  const titleEl = document.getElementById('r-title');
+  if (s.winner === 'player') {
+    titleEl.textContent = 'Win';
+    titleEl.style.color = '#ff4444';
+  } else if (s.winner === 'ai') {
+    titleEl.textContent = 'Lose';
+    titleEl.style.color = '#4488ff';
+  } else {
+    titleEl.textContent = 'Draw';
+    titleEl.style.color = '#ffffff';
+  }
+  document.getElementById('r-player').textContent = s.player_score;
+  document.getElementById('r-ai').textContent     = s.ai_score;
+}
+
+function showPassToast(msg) {
+  return new Promise(resolve => {
+    const el = document.getElementById('pass-toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => { el.classList.remove('show'); resolve(); }, 1600);
+  });
+}
+
+async function onCellClick(x, y) {
+  if (!state || state.game_over || state.turn !== 1) return;
+
+  const validSet = new Set((state.valid_moves || []).map(([vx, vy]) => `${vx},${vy}`));
+  if (!validSet.has(`${x},${y}`)) return;
+
+  const myId = gameId;
+
+  const res = await fetch('/api/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ x, y }),
+  });
+  const s = await res.json();
+  if (myId !== gameId) return;
+
+  applyState(s);
+  if (s.game_over) return;
+
+  if (s.message.includes('パス')) {
+    await showPassToast(s.message);
+  }
+
+  if (s.turn === -1) {
+    await triggerAI(myId, 700);
+  }
+}
+
+async function triggerAI(myId, delay) {
+  if (myId !== gameId) return;
+  document.getElementById('ai-thinking').classList.add('show');
+  await sleep(delay);
+  if (myId !== gameId) { document.getElementById('ai-thinking').classList.remove('show'); return; }
+
+  const res = await fetch('/api/ai_move', { method: 'POST' });
+  document.getElementById('ai-thinking').classList.remove('show');
+  const s = await res.json();
+  if (myId !== gameId) return;
+
+  applyState(s);
+  if (s.game_over) return;
+
+  if (s.message.includes('パス')) {
+    await showPassToast(s.message);
+  }
+
+  // If player was passed, AI plays again
+  if (s.turn === -1) {
+    await triggerAI(myId, 700);
+  }
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>
